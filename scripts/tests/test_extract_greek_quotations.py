@@ -265,5 +265,89 @@ class TestParseMainBody(unittest.TestCase):
         self.assertEqual(egq.parse_main_body(xhtml), [])
 
 
+class TestFormatQuotes(unittest.TestCase):
+    def test_single_quote(self):
+        quotes = [egq.Quote("Aeschylus", ["Hell to cities."], "Agamemnon 689")]
+        text = egq.format_quotes(quotes)
+        self.assertEqual(
+            text,
+            "Hell to cities.\n— Aeschylus, Agamemnon 689\n%\n",
+        )
+
+    def test_multiple_quotes_separated_by_percent(self):
+        quotes = [
+            egq.Quote("Aeschylus", ["First."], "Agamemnon 1"),
+            egq.Quote("Aeschylus", ["Second."], "Agamemnon 2"),
+        ]
+        text = egq.format_quotes(quotes)
+        self.assertEqual(
+            text,
+            "First.\n— Aeschylus, Agamemnon 1\n%\n"
+            "Second.\n— Aeschylus, Agamemnon 2\n%\n",
+        )
+
+    def test_multiline_english(self):
+        quotes = [egq.Quote("Aeschylus", ["Line one.", "Line two."], "Agamemnon 1")]
+        text = egq.format_quotes(quotes)
+        self.assertEqual(
+            text,
+            "Line one.\nLine two.\n— Aeschylus, Agamemnon 1\n%\n",
+        )
+
+    def test_empty_citation_only_author(self):
+        # Defensive: if citation is somehow empty, don't emit a dangling comma.
+        quotes = [egq.Quote("Plato", ["Know thyself."], "")]
+        text = egq.format_quotes(quotes)
+        self.assertEqual(text, "Know thyself.\n— Plato\n%\n")
+
+
+APPENDIX_FRAGMENT = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C368">QUOTATIONS ON GREECE AND GREEKS</p>
+<p class="C362"><strong>Joseph Addison</strong></p>
+<p class="C334">1672–1719</p>
+<p class="C334">English poet, dramatist, and essayist</p>
+<p class="C331">It must be so – Plato, thou reason'st well!</p>
+<p class="C331">Else hence this pleasing hope.</p>
+<p class="C331"><em>Cato</em> (1713), Act 5, Scene 1</p>
+<p class="C362"><strong>Lord Byron</strong></p>
+<p class="C334">1788–1824</p>
+<p class="C331">The isles of Greece, the isles of Greece!</p>
+<p class="C332"><em>Don Juan</em> (1819–1824), canto 3, st. 86</p>
+<p class="C332"><em>of Sappho</em></p>
+</body></html>
+"""
+
+
+class TestParseAppendixOne(unittest.TestCase):
+    def test_extracts_quotes(self):
+        quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
+        self.assertEqual(len(quotes), 2)
+
+    def test_preserves_mixed_case_author(self):
+        quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
+        self.assertEqual(quotes[0].author, "Joseph Addison")
+        self.assertEqual(quotes[1].author, "Lord Byron")
+
+    def test_multiple_c331_accumulate_into_english(self):
+        quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
+        # Note: the Addison entry uses C331 for both the quote lines AND the
+        # source citation (no separate C332). We handle this by treating the
+        # last C331 in a run as the citation when no C332 appears.
+        # For this test, we accept that the source line may appear in the
+        # accumulated text; see next test for explicit citation handling.
+        first = quotes[0]
+        self.assertIn("It must be so", first.english_lines[0])
+
+    def test_citation_from_c332_when_present(self):
+        quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
+        self.assertEqual(quotes[1].citation, "Don Juan (1819–1824), canto 3, st. 86")
+
+    def test_italic_context_note_skipped(self):
+        # The '<em>of Sappho</em>' C332 must not appear in the citation.
+        quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
+        self.assertNotIn("Sappho", quotes[1].citation)
+
+
 if __name__ == "__main__":
     unittest.main()

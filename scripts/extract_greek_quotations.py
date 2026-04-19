@@ -114,6 +114,12 @@ MAIN_CLASS_CITATION = "C332"
 _TRANSLATOR_PREFIX = "Translated by"
 
 
+# Paragraph class codes for Appendix 1 (10_1.xhtml).
+APPENDIX_CLASS_AUTHOR = "C362"          # contains <strong>author</strong>
+APPENDIX_CLASS_ENGLISH = ("C331", "C364")
+APPENDIX_CLASS_CITATION = ("C332", "C365")
+
+
 def parse_main_body(xhtml_str) -> List[Quote]:
     """Parse 09_Quotations.xhtml into a list of Quote objects.
 
@@ -170,6 +176,87 @@ def parse_main_body(xhtml_str) -> List[Quote]:
             continue
 
         # Any other class (C334 metadata, C325 letter heading, etc.) is ignored.
+
+    flush()
+    return quotes
+
+
+def format_quotes(quotes) -> str:
+    """Render a list of Quote objects into fortune-file text.
+
+    Each quote is:
+        <english line 1>
+        [<english line 2>
+         ...]
+        — <Author>[, <Citation>]
+        %
+    """
+    out = []
+    for q in quotes:
+        for line in q.english_lines:
+            out.append(line + "\n")
+        if q.citation:
+            out.append(f"— {q.author}, {q.citation}\n")
+        else:
+            out.append(f"— {q.author}\n")
+        out.append("%\n")
+    return "".join(out)
+
+
+def parse_appendix_one(xhtml_str) -> List[Quote]:
+    """Parse 10_1.xhtml into Quote objects.
+
+    The appendix uses different class codes than the main body and has no
+    C330-style 'new quote' marker — each author block may contain multiple
+    quotes separated only by successive C331/C364 runs. A new quote starts
+    when we see C331/C364 immediately after a citation (C332/C365).
+    """
+    quotes: List[Quote] = []
+    current_author: Optional[str] = None
+    pending: Optional[Quote] = None
+    last_was_citation = False
+
+    def flush():
+        nonlocal pending
+        if pending is not None and pending.english_lines:
+            quotes.append(pending)
+        pending = None
+
+    for p in walk_paragraphs(xhtml_str):
+        cls = p.css_class
+        text = p.text
+
+        if cls == APPENDIX_CLASS_AUTHOR:
+            flush()
+            current_author = text
+            last_was_citation = False
+            continue
+
+        if current_author is None:
+            continue
+
+        if cls in APPENDIX_CLASS_ENGLISH:
+            # A new run of English after a citation starts a new quote.
+            if pending is None or last_was_citation:
+                flush()
+                pending = Quote(author=current_author, english_lines=[], citation="")
+            pending.english_lines.append(text)
+            last_was_citation = False
+            continue
+
+        if cls in APPENDIX_CLASS_CITATION:
+            if p.italic_only:
+                continue
+            if pending is None:
+                continue
+            if pending.citation:
+                pending.citation = f"{pending.citation} {text}"
+            else:
+                pending.citation = text
+            last_was_citation = True
+            continue
+
+        # Any other class (C334 metadata, C368 section heading, etc.) ignored.
 
     flush()
     return quotes
