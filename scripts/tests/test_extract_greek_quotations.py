@@ -1,6 +1,9 @@
+import io
 import os
 import sys
 import unittest
+import xml.etree.ElementTree as ET
+import zipfile
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_DIR = os.path.dirname(THIS_DIR)
@@ -9,12 +12,14 @@ sys.path.insert(0, SCRIPT_DIR)
 import extract_greek_quotations as egq
 
 
+def _p(xml_fragment):
+    """Parse a single <p> element in the xhtml namespace."""
+    wrapped = f'<p xmlns="http://www.w3.org/1999/xhtml">{xml_fragment}</p>'
+    return ET.fromstring(wrapped)
+
+
 class TestReadEpubXhtml(unittest.TestCase):
     def test_returns_two_xhtml_strings(self):
-        # Use a synthetic EPUB built at test time to avoid hard-coding a user path.
-        import io
-        import zipfile
-
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
             z.writestr("OEBPS/html/09_Quotations.xhtml", "<html>main</html>")
@@ -53,17 +58,6 @@ class TestTitleCaseAuthor(unittest.TestCase):
             egq.title_case_author("ADAMANTIUS    JUDAEUS"),
             "Adamantius Judaeus",
         )
-
-
-import xml.etree.ElementTree as ET
-
-XHTML_NS = "{http://www.w3.org/1999/xhtml}"
-
-
-def _p(xml_fragment):
-    """Parse a single <p> element in the xhtml namespace."""
-    wrapped = f'<p xmlns="http://www.w3.org/1999/xhtml">{xml_fragment}</p>'
-    return ET.fromstring(wrapped)
 
 
 class TestIsItalicOnly(unittest.TestCase):
