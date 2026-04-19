@@ -6,6 +6,8 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
+from dataclasses import dataclass
+from typing import Iterator, Optional
 
 XHTML_NS = "{http://www.w3.org/1999/xhtml}"
 
@@ -54,6 +56,36 @@ def is_italic_only(p_element):
     # The <em> must contain something.
     inner = "".join(child.itertext()).strip()
     return bool(inner)
+
+
+@dataclass
+class ParagraphRecord:
+    css_class: Optional[str]
+    text: str
+    italic_only: bool
+
+
+def walk_paragraphs(xhtml_str) -> Iterator[ParagraphRecord]:
+    """Yield a ParagraphRecord for each <p> that is a direct child of <body>.
+
+    Paragraph `text` is the concatenation of all descendant text nodes with
+    internal whitespace collapsed to single spaces and leading/trailing
+    whitespace stripped.
+    """
+    root = ET.fromstring(xhtml_str)
+    body = root.find(f"{XHTML_NS}body")
+    if body is None:
+        raise ValueError("no <body> element found in XHTML")
+
+    for p in body.findall(f"{XHTML_NS}p"):
+        css_class = p.get("class")
+        raw_text = "".join(p.itertext())
+        text = re.sub(r"\s+", " ", raw_text).strip()
+        yield ParagraphRecord(
+            css_class=css_class,
+            text=text,
+            italic_only=is_italic_only(p),
+        )
 
 
 def read_epub_xhtml(epub_source):

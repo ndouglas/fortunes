@@ -82,5 +82,57 @@ class TestIsItalicOnly(unittest.TestCase):
         self.assertFalse(egq.is_italic_only(p))
 
 
+class TestWalkParagraphs(unittest.TestCase):
+    MINIMAL_XHTML = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<p class="C329">AESCHYLUS</p>
+<p class="C334">c.525–456bc</p>
+<p class="C331">Hell to ships, hell to men, hell to cities.</p>
+<p class="C332"><em>Agamemnon</em> 689</p>
+<p class="C332"><em>spoken by the Chorus</em></p>
+</body>
+</html>
+"""
+
+    def test_yields_one_record_per_paragraph(self):
+        records = list(egq.walk_paragraphs(self.MINIMAL_XHTML))
+        self.assertEqual(len(records), 5)
+
+    def test_class_attribute_preserved(self):
+        records = list(egq.walk_paragraphs(self.MINIMAL_XHTML))
+        self.assertEqual(records[0].css_class, "C329")
+        self.assertEqual(records[1].css_class, "C334")
+
+    def test_text_content_extracted(self):
+        records = list(egq.walk_paragraphs(self.MINIMAL_XHTML))
+        self.assertEqual(records[0].text, "AESCHYLUS")
+        self.assertEqual(
+            records[2].text,
+            "Hell to ships, hell to men, hell to cities.",
+        )
+
+    def test_mixed_content_text_joined(self):
+        records = list(egq.walk_paragraphs(self.MINIMAL_XHTML))
+        # Agamemnon italicized + space + "689"
+        self.assertEqual(records[3].text, "Agamemnon 689")
+
+    def test_italic_only_detection(self):
+        records = list(egq.walk_paragraphs(self.MINIMAL_XHTML))
+        self.assertFalse(records[3].italic_only)  # mixed content
+        self.assertTrue(records[4].italic_only)   # italic-only context note
+
+    def test_body_missing_raises(self):
+        with self.assertRaises(ValueError):
+            list(egq.walk_paragraphs('<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"></html>'))
+
+    def test_paragraph_without_class_has_none(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>no class</p></body></html>
+"""
+        records = list(egq.walk_paragraphs(xhtml))
+        self.assertIsNone(records[0].css_class)
+
+
 if __name__ == "__main__":
     unittest.main()
