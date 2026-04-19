@@ -329,15 +329,22 @@ class TestParseAppendixOne(unittest.TestCase):
         self.assertEqual(quotes[0].author, "Joseph Addison")
         self.assertEqual(quotes[1].author, "Lord Byron")
 
-    def test_multiple_c331_accumulate_into_english(self):
+    def test_appendix_c331_only_entry_has_no_citation(self):
+        # The Addison entry uses C331 for both the quote lines AND the source
+        # line (no separate C332). The current parser does not special-case
+        # this: it accumulates every C331 paragraph into english_lines and
+        # leaves citation empty. This test pins that actual behavior so any
+        # future change to it is a deliberate decision, not an accident.
         quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
-        # Note: the Addison entry uses C331 for both the quote lines AND the
-        # source citation (no separate C332). We handle this by treating the
-        # last C331 in a run as the citation when no C332 appears.
-        # For this test, we accept that the source line may appear in the
-        # accumulated text; see next test for explicit citation handling.
-        first = quotes[0]
-        self.assertIn("It must be so", first.english_lines[0])
+        self.assertEqual(
+            quotes[0].english_lines,
+            [
+                "It must be so – Plato, thou reason'st well!",
+                "Else hence this pleasing hope.",
+                "Cato (1713), Act 5, Scene 1",
+            ],
+        )
+        self.assertEqual(quotes[0].citation, "")
 
     def test_citation_from_c332_when_present(self):
         quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)

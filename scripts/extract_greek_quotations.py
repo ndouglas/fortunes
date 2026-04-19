@@ -181,7 +181,7 @@ def parse_main_body(xhtml_str) -> List[Quote]:
     return quotes
 
 
-def format_quotes(quotes) -> str:
+def format_quotes(quotes: List[Quote]) -> str:
     """Render a list of Quote objects into fortune-file text.
 
     Each quote is:
