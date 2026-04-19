@@ -134,5 +134,131 @@ class TestWalkParagraphs(unittest.TestCase):
         self.assertIsNone(records[0].css_class)
 
 
+AESCHYLUS_FRAGMENT = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C325">A</p>
+<p class="C329">AESCHYLUS</p>
+<p class="C334">c.525–456bc</p>
+<p class="C334">Athenian tragic playwright</p>
+<p class="C330"><span class="C412">1</span> GREEK_TEXT_1</p>
+<p class="C331">Hell to ships, hell to men, hell to cities.</p>
+<p class="C332"><em>Agamemnon</em> 689</p>
+<p class="C332"><em>spoken by the Chorus</em></p>
+<p class="C330"><span class="C412">2</span> GREEK_TEXT_2</p>
+<p class="C331">We learn by suffering.</p>
+<p class="C332">Translated by Robert Fagles (1975)</p>
+<p class="C332"><em>Agamemnon</em> 177</p>
+</body></html>
+"""
+
+
+class TestParseMainBody(unittest.TestCase):
+    def test_extracts_two_quotes(self):
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        self.assertEqual(len(quotes), 2)
+
+    def test_author_title_cased(self):
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        self.assertEqual(quotes[0].author, "Aeschylus")
+        self.assertEqual(quotes[1].author, "Aeschylus")
+
+    def test_english_preserved(self):
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        self.assertEqual(
+            quotes[0].english_lines,
+            ["Hell to ships, hell to men, hell to cities."],
+        )
+
+    def test_citation_from_first_nonitalic_c332(self):
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        self.assertEqual(quotes[0].citation, "Agamemnon 689")
+
+    def test_translator_credit_excluded_from_citation(self):
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        # Quote 2's first C332 is 'Translated by ...' — must be skipped.
+        self.assertEqual(quotes[1].citation, "Agamemnon 177")
+
+    def test_multiline_english_accumulates(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C331">Line one of verse.</p>
+<p class="C331">Line two of verse.</p>
+<p class="C332"><em>Agamemnon</em> 1</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(
+            quotes[0].english_lines,
+            ["Line one of verse.", "Line two of verse."],
+        )
+
+    def test_translator_credit_line_in_c331_is_excluded(self):
+        # Saw this in the source: a C331 with 'Translated by ...' content.
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C331">Never too old to learn, it keeps me young.</p>
+<p class="C331">Translated by Robert Fagles (1975)</p>
+<p class="C332"><em>Agamemnon</em> 584</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(
+            quotes[0].english_lines,
+            ["Never too old to learn, it keeps me young."],
+        )
+
+    def test_citation_split_across_two_c332_paragraphs(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">BURTON</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C331">We can say nothing, but what has been said.</p>
+<p class="C332"><em>The Anatomy of Melancholy</em> (1621),</p>
+<p class="C332">Democritus to the Reader</p>
+<p class="C332"><em>and a context note</em></p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(
+            quotes[0].citation,
+            "The Anatomy of Melancholy (1621), Democritus to the Reader",
+        )
+
+    def test_quote_with_missing_english_is_skipped(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C332"><em>Agamemnon</em> 1</p>
+<p class="C330"><span class="C412">2</span> GREEK2</p>
+<p class="C331">Has English.</p>
+<p class="C332"><em>Agamemnon</em> 2</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(len(quotes), 1)
+        self.assertEqual(quotes[0].english_lines, ["Has English."])
+
+    def test_strips_leading_quote_number_from_greek_paragraph(self):
+        # The number span is only in the Greek line; we don't emit Greek.
+        # This test just ensures the C330 paragraph doesn't accidentally become English.
+        quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
+        self.assertNotIn("GREEK_TEXT_1", quotes[0].english_lines[0])
+
+    def test_author_with_only_metadata_produces_no_quotes(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">UNKNOWN</p>
+<p class="C334">Unknown dates</p>
+<p class="C334">Unknown bio</p>
+</body></html>
+"""
+        self.assertEqual(egq.parse_main_body(xhtml), [])
+
+
 if __name__ == "__main__":
     unittest.main()

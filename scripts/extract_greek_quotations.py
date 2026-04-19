@@ -7,7 +7,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional
 
 XHTML_NS = "{http://www.w3.org/1999/xhtml}"
 
@@ -86,6 +86,83 @@ def walk_paragraphs(xhtml_str) -> Iterator[ParagraphRecord]:
             text=text,
             italic_only=is_italic_only(p),
         )
+
+
+@dataclass
+class Quote:
+    author: str
+    english_lines: List[str]
+    citation: str
+
+
+# Paragraph class codes used by the main body (09_Quotations.xhtml).
+MAIN_CLASS_AUTHOR = "C329"
+MAIN_CLASS_QUOTE_START = "C330"       # Greek original; Nth quote begins here
+MAIN_CLASS_ENGLISH = "C331"
+MAIN_CLASS_CITATION = "C332"
+
+_TRANSLATOR_PREFIX = "Translated by"
+
+
+def parse_main_body(xhtml_str) -> List[Quote]:
+    """Parse 09_Quotations.xhtml into a list of Quote objects.
+
+    Walks paragraphs in order. Resets author on C329; starts a new quote on
+    C330; accumulates English on C331; captures citation on C332. Quotes
+    with no English content are dropped.
+    """
+    quotes: List[Quote] = []
+    current_author: Optional[str] = None
+    pending: Optional[Quote] = None
+
+    def flush():
+        nonlocal pending
+        if pending is not None and pending.english_lines:
+            quotes.append(pending)
+        pending = None
+
+    for p in walk_paragraphs(xhtml_str):
+        cls = p.css_class
+        text = p.text
+
+        if cls == MAIN_CLASS_AUTHOR:
+            flush()
+            current_author = title_case_author(text)
+            continue
+
+        if current_author is None:
+            # Paragraphs before the first author header (letter headings, etc.).
+            continue
+
+        if cls == MAIN_CLASS_QUOTE_START:
+            flush()
+            pending = Quote(author=current_author, english_lines=[], citation="")
+            continue
+
+        if pending is None:
+            continue
+
+        if cls == MAIN_CLASS_ENGLISH:
+            if text.startswith(_TRANSLATOR_PREFIX):
+                continue
+            pending.english_lines.append(text)
+            continue
+
+        if cls == MAIN_CLASS_CITATION:
+            if p.italic_only:
+                continue
+            if text.startswith(_TRANSLATOR_PREFIX):
+                continue
+            if pending.citation:
+                pending.citation = f"{pending.citation} {text}"
+            else:
+                pending.citation = text
+            continue
+
+        # Any other class (C334 metadata, C325 letter heading, etc.) is ignored.
+
+    flush()
+    return quotes
 
 
 def read_epub_xhtml(epub_source):
