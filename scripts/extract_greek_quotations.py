@@ -14,8 +14,18 @@ XHTML_NS = "{http://www.w3.org/1999/xhtml}"
 MAIN_XHTML_PATH = "OEBPS/html/09_Quotations.xhtml"
 APPENDIX_XHTML_PATH = "OEBPS/html/10_1.xhtml"
 
+MAIN_OUTPUT = "classical_greek_quotations"
+APPENDIX_OUTPUT = "quotations_on_greeks"
+
 
 _LOWERCASE_WORDS = {"of", "the", "and", "de", "von", "der", "le", "la"}
+
+
+_GREEK_RE = re.compile(r"[\u0370-\u03FF\u1F00-\u1FFF]")
+
+
+def _contains_greek(text):
+    return bool(_GREEK_RE.search(text))
 
 
 def _capitalize_with_apostrophes(word):
@@ -111,7 +121,7 @@ MAIN_CLASS_QUOTE_START = "C330"       # Greek original; Nth quote begins here
 MAIN_CLASS_ENGLISH = "C331"
 MAIN_CLASS_CITATION = "C332"
 
-_TRANSLATOR_PREFIX = "Translated by"
+_TRANSLATOR_PREFIXES = ("Translated by", "Translated in")
 
 
 # Paragraph class codes for Appendix 1 (10_1.xhtml).
@@ -159,7 +169,9 @@ def parse_main_body(xhtml_str) -> List[Quote]:
             continue
 
         if cls == MAIN_CLASS_ENGLISH:
-            if text.startswith(_TRANSLATOR_PREFIX):
+            if _contains_greek(text):
+                continue
+            if text.startswith(_TRANSLATOR_PREFIXES):
                 continue
             pending.english_lines.append(text)
             continue
@@ -167,7 +179,7 @@ def parse_main_body(xhtml_str) -> List[Quote]:
         if cls == MAIN_CLASS_CITATION:
             if p.italic_only:
                 continue
-            if text.startswith(_TRANSLATOR_PREFIX):
+            if text.startswith(_TRANSLATOR_PREFIXES):
                 continue
             if pending.citation:
                 pending.citation = f"{pending.citation} {text}"
@@ -236,6 +248,8 @@ def parse_appendix_one(xhtml_str) -> List[Quote]:
             continue
 
         if cls in APPENDIX_CLASS_ENGLISH:
+            if _contains_greek(text):
+                continue
             # A new run of English after a citation starts a new quote.
             if pending is None or last_was_citation:
                 flush()
@@ -280,8 +294,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     main_xhtml, appendix_xhtml = read_epub_xhtml(args.epub_path)
-    print(f"read main body: {len(main_xhtml):,} chars", file=sys.stderr)
-    print(f"read appendix:  {len(appendix_xhtml):,} chars", file=sys.stderr)
+
+    main_quotes = parse_main_body(main_xhtml)
+    appendix_quotes = parse_appendix_one(appendix_xhtml)
+
+    with open(MAIN_OUTPUT, "w", encoding="utf-8") as f:
+        f.write(format_quotes(main_quotes))
+    with open(APPENDIX_OUTPUT, "w", encoding="utf-8") as f:
+        f.write(format_quotes(appendix_quotes))
+
+    print(f"{MAIN_OUTPUT}: {len(main_quotes):,} quotes", file=sys.stderr)
+    print(f"{APPENDIX_OUTPUT}: {len(appendix_quotes):,} quotes", file=sys.stderr)
 
 
 if __name__ == "__main__":

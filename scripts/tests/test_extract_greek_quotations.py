@@ -264,6 +264,48 @@ class TestParseMainBody(unittest.TestCase):
 """
         self.assertEqual(egq.parse_main_body(xhtml), [])
 
+    def test_c331_containing_greek_is_skipped(self):
+        # A Greek continuation line (C331 with polytonic Greek) must not
+        # appear in english_lines.
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> Θεοὺς μὲν αἰτῶ τῶνδ’ ἀπαλλαγὴν πόνων,</p>
+<p class="C331">φρουρᾶς ἐτείας μῆκος, ἣν κοιμώμενος</p>
+<p class="C331">I wish the gods would end my plight.</p>
+<p class="C332"><em>Agamemnon</em> 1</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(len(quotes), 1)
+        self.assertEqual(quotes[0].english_lines, ["I wish the gods would end my plight."])
+
+    def test_translated_in_prefix_skipped_in_citation(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C331">I wish the gods would end my plight.</p>
+<p class="C332">Translated in The Oxford Dictionary of Quotations (2004)</p>
+<p class="C332"><em>Agamemnon</em> 1</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(quotes[0].citation, "Agamemnon 1")
+
+    def test_translated_in_prefix_skipped_in_english(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C329">AESCHYLUS</p>
+<p class="C330"><span class="C412">1</span> GREEK</p>
+<p class="C331">I wish the gods would end my plight.</p>
+<p class="C331">Translated in The Oxford Dictionary of Quotations (2004)</p>
+<p class="C332"><em>Agamemnon</em> 1</p>
+</body></html>
+"""
+        quotes = egq.parse_main_body(xhtml)
+        self.assertEqual(quotes[0].english_lines, ["I wish the gods would end my plight."])
+
 
 class TestFormatQuotes(unittest.TestCase):
     def test_single_quote(self):
@@ -354,6 +396,19 @@ class TestParseAppendixOne(unittest.TestCase):
         # The '<em>of Sappho</em>' C332 must not appear in the citation.
         quotes = egq.parse_appendix_one(APPENDIX_FRAGMENT)
         self.assertNotIn("Sappho", quotes[1].citation)
+
+    def test_appendix_c331_containing_greek_is_skipped(self):
+        xhtml = """<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p class="C362"><strong>Some Author</strong></p>
+<p class="C331">The ancients called it Θάλασσα.</p>
+<p class="C331">The Greeks had a word for it.</p>
+<p class="C332"><em>Essays</em> (1900)</p>
+</body></html>
+"""
+        quotes = egq.parse_appendix_one(xhtml)
+        # Greek-containing line dropped; only the clean English remains.
+        self.assertEqual(quotes[0].english_lines, ["The Greeks had a word for it."])
 
 
 if __name__ == "__main__":
