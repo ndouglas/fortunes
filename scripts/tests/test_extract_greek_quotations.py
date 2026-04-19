@@ -59,6 +59,9 @@ class TestTitleCaseAuthor(unittest.TestCase):
             "Adamantius Judaeus",
         )
 
+    def test_capitalizes_after_apostrophe(self):
+        self.assertEqual(egq.title_case_author("O'BRIEN"), "O'Brien")
+
 
 class TestIsItalicOnly(unittest.TestCase):
     def test_italic_text_only(self):
@@ -243,11 +246,13 @@ class TestParseMainBody(unittest.TestCase):
         self.assertEqual(len(quotes), 1)
         self.assertEqual(quotes[0].english_lines, ["Has English."])
 
-    def test_strips_leading_quote_number_from_greek_paragraph(self):
-        # The number span is only in the Greek line; we don't emit Greek.
-        # This test just ensures the C330 paragraph doesn't accidentally become English.
+    def test_greek_paragraph_does_not_appear_in_english(self):
         quotes = egq.parse_main_body(AESCHYLUS_FRAGMENT)
-        self.assertNotIn("GREEK_TEXT_1", quotes[0].english_lines[0])
+        for quote in quotes:
+            for line in quote.english_lines:
+                self.assertNotIn("GREEK_TEXT", line)
+        self.assertEqual(len(quotes[0].english_lines), 1)
+        self.assertEqual(len(quotes[1].english_lines), 1)
 
     def test_author_with_only_metadata_produces_no_quotes(self):
         xhtml = """<?xml version="1.0"?>

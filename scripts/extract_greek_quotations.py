@@ -18,11 +18,21 @@ APPENDIX_XHTML_PATH = "OEBPS/html/10_1.xhtml"
 _LOWERCASE_WORDS = {"of", "the", "and", "de", "von", "der", "le", "la"}
 
 
+def _capitalize_with_apostrophes(word):
+    """Capitalize the word and the first letter after any apostrophe.
+
+    'o'brien' -> "O'Brien"
+    """
+    parts = word.split("'")
+    return "'".join(p.capitalize() for p in parts)
+
+
 def title_case_author(raw):
     """Convert the book's ALL CAPS author header to display title case.
 
     'AESCHINES SOCRATICUS' -> 'Aeschines Socraticus'
     'DIONYSIUS OF HALICARNASSUS' -> 'Dionysius of Halicarnassus'
+    "O'BRIEN" -> "O'Brien"
     """
     words = raw.strip().split()
     result = []
@@ -31,7 +41,7 @@ def title_case_author(raw):
         if i > 0 and lower in _LOWERCASE_WORDS:
             result.append(lower)
         else:
-            result.append(lower.capitalize())
+            result.append(_capitalize_with_apostrophes(lower))
     return " ".join(result)
 
 
